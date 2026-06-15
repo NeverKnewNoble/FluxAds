@@ -1,0 +1,45 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Env / secrets (Vercel Blob token lives here)
+.env
+.env.*
+!.env.example
+
+# Heavy media — hosted on Vercel Blob, never committed to Git.
+# Originals + locally-optimized copies stay on disk but out of the repo.
+media-build/
+src/assets/**/*.mp4
+src/assets/**/*.mov
+src/assets/**/*.webm
+src/assets/**/*.png
+src/assets/**/*.jpg
+src/assets/**/*.jpeg
+src/assets/**/*.JPG
+src/assets/**/*.JPEG
+src/assets/**/*.webp
+src/assets/**/*.avif
+# ...but keep tiny committed UI vectors
+!src/assets/**/*.svg
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
