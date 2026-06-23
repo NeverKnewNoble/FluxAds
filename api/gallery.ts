@@ -1,0 +1,29 @@
+/* ----------------------------------------------------------------------------
+   GET /api/gallery — live gallery feed (Vercel serverless function)
+
+   Lists the Vercel Blob store server-side and returns shaped works as JSON, so
+   the front-end reflects Blob changes (adds/deletes) without a rebuild. The
+   BLOB_READ_WRITE_TOKEN must be set in the Vercel project's Environment
+   Variables — it is read here on the server and never sent to the browser.
+---------------------------------------------------------------------------- */
+import { loadGallery } from '../src/lib/gallery-server'
+
+// Minimal structural types so we don't depend on @vercel/node.
+type Res = {
+  setHeader(name: string, value: string): void
+  status(code: number): Res
+  json(body: unknown): void
+}
+
+export default async function handler(_req: unknown, res: Res) {
+  try {
+    const works = await loadGallery(process.env.BLOB_READ_WRITE_TOKEN)
+    // Cache at the edge for a minute; serve stale while revalidating so the
+    // gallery stays fast but still picks up Blob changes within ~60s.
+    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300')
+    res.status(200).json({ works })
+  } catch (err) {
+    console.error('[gallery] list failed:', err)
+    res.status(500).json({ works: [], error: 'Failed to load gallery' })
+  }
+}

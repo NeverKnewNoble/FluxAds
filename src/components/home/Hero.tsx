@@ -1,7 +1,11 @@
 import Reveal from './Reveal'
-import { WHATSAPP_LINK, heroTiles } from './content'
+import { WHATSAPP_LINK, heroTiles, type HeroTile } from './content'
 
 export default function Hero() {
+  // The hero collage is intentionally fixed/curated — only the gallery below is
+  // live from Blob.
+  const tiles = heroTiles
+
   return (
     <section
       id="top"
@@ -74,17 +78,17 @@ export default function Hero() {
           <FloatTile
             className="absolute right-2 top-0 w-72 animate-float xl:w-80"
             aspect="aspect-[3/4]"
-            tile={heroTiles[0]}
+            tile={tiles[0]}
           />
           <FloatTile
             className="absolute left-0 top-40 w-60 animate-float [animation-delay:-2.5s] xl:w-64"
             aspect="aspect-[9/16]"
-            tile={heroTiles[1]}
+            tile={tiles[1]}
           />
           <FloatTile
             className="absolute bottom-0 right-20 w-52 animate-float [animation-delay:-4.5s] xl:w-56"
             aspect="aspect-[9/16]"
-            tile={heroTiles[2]}
+            tile={tiles[2]}
           />
         </Reveal>
       </div>
@@ -99,8 +103,9 @@ function FloatTile({
 }: {
   className?: string
   aspect: string
-  tile: { tag: string; type: 'image' | 'video'; src: string }
+  tile?: HeroTile
 }) {
+  if (!tile) return null
   return (
     <figure
       className={`overflow-hidden rounded-2xl border border-line shadow-[0_36px_70px_-26px_rgba(23,18,12,0.55)] ${className}`}

@@ -1,4 +1,8 @@
 import urlManifest from '../../media-manifest.json'
+import type { Work } from '../../lib/gallery-curation'
+
+// Re-exported so existing imports (`import { type Work } from './content'`) keep working.
+export type { Work, HeroTile } from '../../lib/gallery-curation'
 
 /* ----------------------------------------------------------------------------
    Flux Ads — site content
@@ -97,17 +101,9 @@ const m = (file: string): string => {
   return url ?? ''
 }
 
-export type Work = {
-  id: string
-  title: string
-  category: string
-  type: 'image' | 'video'
-  /** Tailwind aspect ratio class for the masonry tile */
-  aspect: string
-  /** Bundled media URL */
-  src: string
-}
-
+/* The list below is now a *fallback snapshot* only. The live gallery is served
+   by GET /api/gallery (which lists Vercel Blob) and consumed via useGallery();
+   this array renders instantly on first paint and if that request fails. */
 export const works: Work[] = [
   {
     id: 'w01',
@@ -340,14 +336,6 @@ export const works: Work[] = [
     type: 'image',
     aspect: 'aspect-[9/16]',
     src: m('3b35c68c-e266-4b37-8e87-31fc93b00f46.JPG'),
-  },
-  {
-    id: 'w18',
-    title: 'Product Hand-Hold Ad',
-    category: 'Advertising',
-    type: 'image',
-    aspect: 'aspect-[9/16]',
-    src: m('36b96a02-a917-4d7e-a181-0d82839e3ec1.JPG'),
   },
 ]
 

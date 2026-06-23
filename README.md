@@ -1,29 +1,43 @@
 # Flux Ads — React + TypeScript + Vite
 
-## Media pipeline (Vercel Blob)
+## Gallery (live from Vercel Blob)
 
-Gallery images and videos are **not committed to Git** — they're optimized and
-served from a Vercel Blob CDN. The repo stays lightweight; the site reads URLs
-from `src/media-manifest.json`.
+The gallery is **live**: the site fetches `GET /api/gallery`, which lists the
+Blob store's `fluxads/` folder server-side and returns the media. Add or delete
+files in `fluxads/` and the change shows on the site within ~60s — **no rebuild
+or code edit required**.
 
-**Folders**
-- `src/assets/gallery/` — original source media (git-ignored; kept locally to re-optimize)
-- `media-build/` — web-optimized output (git-ignored; generated)
-- `src/media-manifest.json` — committed map of `filename -> CDN URL` (the app reads this)
+- `api/gallery.ts` — serverless function that lists Blob (token stays server-side).
+- `src/lib/gallery-server.ts` — the listing logic (also used by the Vite dev server).
+- `src/lib/gallery-curation.ts` — optional overlay of nice titles/categories/order,
+  keyed by filename. Files without an entry still appear (auto title, newest first).
+- `src/components/home/content.ts` — a bundled snapshot used only as an instant
+  fallback for first paint / if the API is unreachable.
 
-**One-time setup**
-1. In your Vercel project: **Storage → Create → Blob**, then open the store's
-   **`.env.local`** tab and copy `BLOB_READ_WRITE_TOKEN`.
-2. `cp .env.example .env.local` and paste the token in.
+**Required env var (local AND Vercel)**
+`BLOB_READ_WRITE_TOKEN` must be set both in `.env.local` *and* in your Vercel
+project's **Settings → Environment Variables** — the function reads it at runtime.
+1. Vercel project: **Storage → Create → Blob**, open the store's **`.env.local`**
+   tab, copy `BLOB_READ_WRITE_TOKEN`.
+2. `cp .env.example .env.local` and paste it in (for local dev).
+3. Add the same variable in the Vercel project's Environment Variables (for prod).
 
-**Publish / update media**
+**Add media (optimized) to the gallery**
 ```bash
-node scripts/optimize-media.mjs   # src/assets/gallery -> media-build (WebP + MP4)
-node scripts/upload-blob.mjs      # media-build -> Vercel Blob; writes src/media-manifest.json
+node scripts/add-media.mjs <file> [<file> ...]   # optimizes -> uploads to fluxads/
 ```
-To add new work: drop the original into `src/assets/gallery/`, add a `works`
-entry in `src/components/home/content.ts` referencing its filename, then re-run
-both scripts above and commit the updated `src/media-manifest.json`.
+This converts images to WebP and videos to streaming MP4 (long edge ≤ 1280px),
+uploads them to `fluxads/`, and prints an optional curation line you can paste
+into `src/lib/gallery-curation.ts` for a custom title. New media appears at the
+top of the gallery automatically.
+
+**Remove media:** delete the file from the `fluxads/` folder in the Blob
+dashboard — it disappears from the live gallery within ~60s.
+
+> Note: files uploaded to the Blob store **root** (e.g. via the dashboard's
+> default upload) are *not* shown — only the `fluxads/` folder is listed. Use
+> `scripts/add-media.mjs` (or upload into the `fluxads/` path) so files are both
+> optimized and in the right place.
 
 ---
 

@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import Reveal from './Reveal'
 import Lightbox from './Lightbox'
-import { works, WHATSAPP_LINK, type Work } from './content'
+import { WHATSAPP_LINK, type Work } from './content'
+import { useGallery } from './useGallery'
 
 type Filter = 'all' | 'image' | 'video'
 
@@ -14,6 +15,7 @@ const filters: { key: Filter; label: string }[] = [
 export default function Showcase() {
   const [active, setActive] = useState<Filter>('all')
   const [openIndex, setOpenIndex] = useState<number | null>(null)
+  const { works } = useGallery()
   const shown = works.filter((w) => active === 'all' || w.type === active)
 
   const selectFilter = (key: Filter) => {
@@ -112,14 +114,16 @@ function Tile({
         aria-label={`Enlarge: ${work.title}`}
         className="group block w-full cursor-zoom-in overflow-hidden rounded-2xl border border-line bg-ink-card text-left shadow-[0_18px_40px_-24px_rgba(23,18,12,0.55)] ring-1 ring-transparent transition duration-500 hover:shadow-[0_30px_60px_-28px_rgba(23,18,12,0.7)] hover:ring-flux/30"
       >
-        <div className={`relative ${work.aspect} w-full`}>
+        <div className={`relative w-full ${work.aspect}`}>
           {work.type === 'image' ? (
             <img
               src={work.src}
               alt={work.title}
               loading="lazy"
               decoding="async"
-              className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
+              className={`w-full transition-transform duration-700 ease-out group-hover:scale-[1.04] ${
+                work.aspect ? 'h-full object-cover' : 'block h-auto'
+              }`}
             />
           ) : (
             <video
@@ -129,7 +133,7 @@ function Tile({
               playsInline
               autoPlay
               preload="metadata"
-              className="h-full w-full object-cover"
+              className={`w-full ${work.aspect ? 'h-full object-cover' : 'block h-auto'}`}
             />
           )}
 
