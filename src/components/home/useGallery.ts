@@ -1,24 +1,24 @@
 import { useEffect, useState } from 'react'
-import { works as fallbackWorks } from './content'
 import type { Work } from '../../lib/gallery-curation'
 
 type GalleryState = {
-  /** Current works — starts as the bundled fallback, swaps to live on load. */
+  /** Works currently in the Vercel Blob store. Empty until the feed loads. */
   works: Work[]
   loading: boolean
-  /** True once the live `/api/gallery` feed has populated the list. */
+  /** True once the live `/api/gallery` feed has responded successfully. */
   live: boolean
   error: boolean
 }
 
 /**
  * Fetches the live gallery from `/api/gallery` (which lists Vercel Blob) and
- * falls back to the bundled snapshot for instant first paint and resilience if
- * the request fails. Adds/deletes in Blob appear here without a redeploy.
+ * renders only what is actually in the store — there is no bundled snapshot, so
+ * a file deleted from Blob disappears from the site and can never reappear.
+ * Adds/deletes in Blob show up here within ~60s (the feed's edge cache).
  */
 export function useGallery(): GalleryState {
   const [state, setState] = useState<GalleryState>({
-    works: fallbackWorks,
+    works: [],
     loading: true,
     live: false,
     error: false,
@@ -32,17 +32,13 @@ export function useGallery(): GalleryState {
       .then((data: { works?: Work[] }) => {
         if (cancelled) return
         const live = Array.isArray(data.works) ? data.works : []
-        setState({
-          works: live.length ? live : fallbackWorks,
-          loading: false,
-          live: live.length > 0,
-          error: false,
-        })
+        setState({ works: live, loading: false, live: true, error: false })
       })
       .catch(() => {
         if (cancelled) return
-        // Keep the fallback on screen rather than blanking the gallery.
-        setState((s) => ({ ...s, loading: false, error: true }))
+        // No snapshot to fall back to — leave the gallery empty rather than
+        // resurrecting deleted media.
+        setState({ works: [], loading: false, live: false, error: true })
       })
 
     return () => {

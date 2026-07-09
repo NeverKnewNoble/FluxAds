@@ -1,10 +1,11 @@
 import Reveal from './Reveal'
-import { WHATSAPP_LINK, heroTiles, type HeroTile } from './content'
+import { WHATSAPP_LINK, type HeroTile } from './content'
+import { pickHeroTiles, type Work } from '../../lib/gallery-curation'
 
-export default function Hero() {
-  // The hero collage is intentionally fixed/curated — only the gallery below is
-  // live from Blob.
-  const tiles = heroTiles
+export default function Hero({ works }: { works: Work[] }) {
+  // Hero collage is picked live from the Blob-backed gallery, so it never shows
+  // media that has been deleted from the store.
+  const tiles = pickHeroTiles(works)
 
   return (
     <section

@@ -2,7 +2,6 @@ import { useState } from 'react'
 import Reveal from './Reveal'
 import Lightbox from './Lightbox'
 import { WHATSAPP_LINK, type Work } from './content'
-import { useGallery } from './useGallery'
 
 type Filter = 'all' | 'image' | 'video'
 
@@ -12,10 +11,9 @@ const filters: { key: Filter; label: string }[] = [
   { key: 'video', label: 'Videos' },
 ]
 
-export default function Showcase() {
+export default function Showcase({ works }: { works: Work[] }) {
   const [active, setActive] = useState<Filter>('all')
   const [openIndex, setOpenIndex] = useState<number | null>(null)
-  const { works } = useGallery()
   const shown = works.filter((w) => active === 'all' || w.type === active)
 
   const selectFilter = (key: Filter) => {
