@@ -29,8 +29,10 @@ function galleryDevApi(token?: string): PluginOption {
       server.middlewares.use((req, res, next) => {
         if (!req.url || !req.url.split('?')[0].endsWith('/api/gallery')) return next()
         // Loaded through Vite's module graph so it compiles TS and resolves deps.
+        // Points at api/gallery.ts — the single source of the Blob listing +
+        // shaping — so `yarn dev` matches the deployed function exactly.
         server
-          .ssrLoadModule('/src/lib/gallery-server.ts')
+          .ssrLoadModule('/api/gallery.ts')
           .then((mod) => (mod.loadGallery as (t?: string) => Promise<unknown>)(token))
           .then((works) => {
             res.setHeader('Content-Type', 'application/json')

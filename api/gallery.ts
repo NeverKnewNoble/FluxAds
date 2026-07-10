@@ -1,9 +1,9 @@
 /* ----------------------------------------------------------------------------
    GET /api/gallery — live gallery feed (Vercel serverless function)
 
-   Lists the Vercel Blob store server-side and returns shaped works as JSON, so
-   the front-end reflects Blob changes (adds/deletes) without a rebuild. The
-   BLOB_READ_WRITE_TOKEN must be set in the Vercel project's Environment
+   Lists the ENTIRE Vercel Blob store server-side and returns shaped works as
+   JSON, so the front-end reflects Blob changes (adds/deletes) without a rebuild.
+   The BLOB_READ_WRITE_TOKEN must be set in the Vercel project's Environment
    Variables — it is read here on the server and never sent to the browser.
 
    SELF-CONTAINED ON PURPOSE. This file imports only `@vercel/blob` (a real
@@ -13,11 +13,10 @@
    `api/` into the lambda — an import into `src/` resolves at build but throws
    ERR_MODULE_NOT_FOUND at runtime (FUNCTION_INVOCATION_FAILED).
 
-   The shaping logic + curation map below are duplicated from
-   `src/lib/gallery-curation.ts`, which the front-end still uses for the `Work`
-   type and hero picking. Keep the `curation` map here in sync when you curate
-   new uploads. If the two drift, the only effect is server-side titles falling
-   back to the auto-derived name — the site keeps working.
+   This is also the SINGLE source of the curation map + shaping. The Vite dev
+   middleware (vite.config.ts) loads this file's `loadGallery` export via
+   ssrLoadModule so `yarn dev` matches production. The front-end imports only the
+   `Work`/`HeroTile` types and `pickHeroTiles` from src/lib/gallery-curation.ts.
 ---------------------------------------------------------------------------- */
 
 import { list } from '@vercel/blob'
@@ -47,8 +46,11 @@ type Work = {
 type Meta = { title: string; category: string; aspect: string; order: number }
 type BlobInput = { pathname: string; url: string; uploadedAt: number }
 
-const PREFIX = 'fluxads/'
 const VIDEO_EXT = new Set(['mp4', 'webm', 'mov', 'm4v'])
+const IMAGE_EXT = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif'])
+
+const extOf = (pathname: string): string =>
+  pathname.slice(pathname.lastIndexOf('.') + 1).toLowerCase()
 
 /** Filename without its directory or extension — the curation lookup key. */
 const stemOf = (pathname: string): string => {
@@ -57,26 +59,31 @@ const stemOf = (pathname: string): string => {
   return dot === -1 ? base : base.slice(0, dot)
 }
 
-const typeForFile = (pathname: string): MediaType => {
-  const ext = pathname.slice(pathname.lastIndexOf('.') + 1).toLowerCase()
-  return VIDEO_EXT.has(ext) ? 'video' : 'image'
+const typeForFile = (pathname: string): MediaType =>
+  VIDEO_EXT.has(extOf(pathname)) ? 'video' : 'image'
+
+const isMedia = (pathname: string): boolean => {
+  const ext = extOf(pathname)
+  return VIDEO_EXT.has(ext) || IMAGE_EXT.has(ext)
 }
 
 /** Best-effort title for an uncurated upload, derived from its filename. */
 const humanize = (stem: string): string => {
   const cleaned = stem
+    .replace(/\b[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\b/gi, ' ') // uuids (hyphens intact)
     .replace(/[_-]+/g, ' ')
-    .replace(/\b[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\b/gi, '') // uuids
-    .replace(/\b\d{6,}\b/g, '') // long ids / timestamps
+    .replace(/[^0-9a-z\s]/gi, ' ') // drop #, {, }, (), quotes, commas, etc.
+    .replace(/\b\d{6,}\b/g, ' ') // long ids / timestamps
     .replace(/\s+/g, ' ')
     .trim()
   if (!cleaned) return 'New Work'
   return cleaned.replace(/\b\w/g, (c) => c.toUpperCase())
 }
 
-/* Curation overlay. Keyed by file stem (name without extension). The `order`
-   pins curated items into a deliberate masonry sequence; uncurated uploads are
-   surfaced ahead of these, newest first. Mirror of src/lib/gallery-curation.ts. */
+/* Curation overlay. Keyed by file stem (name without extension), so it applies
+   regardless of which folder a file lives in. The `order` pins curated items
+   into a deliberate masonry sequence; uncurated uploads are surfaced ahead of
+   these, newest first. To curate a new upload, add an entry here. */
 const curation: Record<string, Meta> = {
   'africanwear': { title: 'African Wear — Editorial', category: 'Fashion', aspect: 'aspect-[9/16]', order: -2 },
   'african-mum': { title: 'African Mum — Motion', category: 'Advertising', aspect: 'aspect-[16/9]', order: -1 },
@@ -111,26 +118,47 @@ const curation: Record<string, Meta> = {
   '3b35c68c-e266-4b37-8e87-31fc93b00f46': { title: 'Family Living — Lifestyle', category: 'Advertising', aspect: 'aspect-[9/16]', order: 28 },
 }
 
-/** Shape a raw Blob listing into ordered gallery works (newest uncurated first). */
+/**
+ * Shape a raw Blob listing into ordered gallery works.
+ *
+ * Dedupes by stem: the same work often exists twice — a root original (e.g.
+ * `photo.JPG`) and an optimized copy under `fluxads/` (e.g. `fluxads/photo.webp`).
+ * We keep ONE per stem, preferring the web-optimized `webp` (tiebreak: newest),
+ * so nothing renders twice. Curation is keyed by stem, so it applies to whichever
+ * copy wins. New (uncurated) uploads come first, newest first; curated items
+ * follow in their pinned order.
+ */
 function shapeBlobs(blobs: BlobInput[]): Work[] {
-  const NEW = Number.MIN_SAFE_INTEGER // uncurated uploads sort first (newest first)
+  // Pick the best blob per stem.
+  const best = new Map<string, BlobInput>()
+  const rank = (b: BlobInput) => (extOf(b.pathname) === 'webp' ? 1 : 0)
+  for (const b of blobs) {
+    if (!b.pathname || b.pathname.endsWith('/') || !isMedia(b.pathname)) continue
+    const key = stemOf(b.pathname)
+    const cur = best.get(key)
+    if (!cur) {
+      best.set(key, b)
+      continue
+    }
+    const better = rank(b) !== rank(cur) ? rank(b) > rank(cur) : b.uploadedAt > cur.uploadedAt
+    if (better) best.set(key, b)
+  }
 
-  const rows = blobs
-    .filter((b) => b.pathname && !b.pathname.endsWith('/')) // skip folder markers
-    .map((b) => {
-      const stem = stemOf(b.pathname)
-      const meta = curation[stem]
-      const work: Work = {
-        id: stem || b.pathname,
-        title: meta?.title ?? humanize(stem),
-        category: meta?.category ?? 'New Work',
-        type: typeForFile(b.pathname),
-        aspect: meta?.aspect ?? '',
-        src: b.url,
-        uploadedAt: b.uploadedAt,
-      }
-      return { work, order: meta?.order ?? NEW }
-    })
+  const NEW = Number.MIN_SAFE_INTEGER // uncurated uploads sort first (newest first)
+  const rows = [...best.values()].map((b) => {
+    const stem = stemOf(b.pathname)
+    const meta = curation[stem]
+    const work: Work = {
+      id: stem || b.pathname,
+      title: meta?.title ?? humanize(stem),
+      category: meta?.category ?? 'New Work',
+      type: typeForFile(b.pathname),
+      aspect: meta?.aspect ?? '',
+      src: b.url,
+      uploadedAt: b.uploadedAt,
+    }
+    return { work, order: meta?.order ?? NEW }
+  })
 
   rows.sort((a, b) => {
     if (a.order !== b.order) return a.order - b.order
@@ -140,13 +168,13 @@ function shapeBlobs(blobs: BlobInput[]): Work[] {
   return rows.map((r) => r.work)
 }
 
-/** List the whole Blob store (paging through cursors) and shape it. */
-async function loadGallery(token: string): Promise<Work[]> {
+/** List the whole Blob store (every folder, paging through cursors) and shape it. */
+export async function loadGallery(token?: string): Promise<Work[]> {
   const blobs: BlobInput[] = []
   let cursor: string | undefined
 
   do {
-    const res = await list({ prefix: PREFIX, limit: 1000, cursor, token })
+    const res = await list({ limit: 1000, cursor, ...(token ? { token } : {}) })
     for (const b of res.blobs) {
       blobs.push({ pathname: b.pathname, url: b.url, uploadedAt: b.uploadedAt.getTime() })
     }
