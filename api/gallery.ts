@@ -6,10 +6,15 @@
    BLOB_READ_WRITE_TOKEN must be set in the Vercel project's Environment
    Variables — it is read here on the server and never sent to the browser.
 
-   Everything runs inside a try/catch (including the dynamic import of the Blob
-   loader) so a load-time failure returns readable JSON — with the real cause in
-   `error` — instead of a hard FUNCTION_INVOCATION_FAILED crash.
+   `loadGallery` is imported STATICALLY (not `await import()`): Vercel's function
+   bundler inlines static local imports into the deployed bundle, whereas a
+   dynamic import of a file outside `api/` is left as an unresolved runtime
+   require (`Cannot find module '/var/task/src/lib/gallery-server'`). Runtime
+   failures from the Blob API are still caught below and returned as readable
+   JSON instead of a hard FUNCTION_INVOCATION_FAILED crash.
 ---------------------------------------------------------------------------- */
+
+import { loadGallery } from '../src/lib/gallery-server'
 
 // Minimal structural types so we don't depend on @vercel/node.
 type Res = {
@@ -31,9 +36,6 @@ export default async function handler(_req: unknown, res: Res) {
       return
     }
 
-    // Dynamic import so a bundling/load error is catchable here rather than
-    // crashing the function at module load.
-    const { loadGallery } = await import('../src/lib/gallery-server')
     const works = await loadGallery(token)
 
     // Cache at the edge for a minute; serve stale while revalidating so the
